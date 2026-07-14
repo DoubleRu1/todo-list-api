@@ -1,0 +1,41 @@
+name: CI
+
+# 触发条件：推送到 main 分支，或者提 PR 时触发
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    name: Run Pytest
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 安装并配置 uv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          # 使用 uv.lock 进行缓存，大幅提升后续 CI 速度
+          cache-dependency-glob: "uv.lock"
+
+      # 3. 设置 Python 环境
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version" # 读取项目中的 .python-version
+
+      # 4. 安装依赖
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
+      # 5. 运行测试
+      - name: Run tests with pytest
+        run: |
+          PYTHONPATH=. uv run pytest
