@@ -1,11 +1,10 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlmodel import create_engine, Session, SQLModel
+from sqlmodel.pool import StaticPool
 
 from src.main import app
-from src.database import Base, get_db
+from src.database import get_db
 from src.models import User
 from src.security import get_password_hash
 
@@ -18,10 +17,9 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # 在测试开始前就创建所有表
-Base.metadata.create_all(bind=engine)
+SQLModel.metadata.create_all(bind=engine)
 
 @pytest.fixture(scope="function")
 def db_session():
@@ -30,7 +28,7 @@ def db_session():
     transaction = connection.begin()
     
     # 将 session 绑定到当前连接
-    session = TestingSessionLocal(bind=connection)
+    session = Session(bind=connection)
     try:
         yield session
     finally:
@@ -70,4 +68,3 @@ def auth_headers(client, test_user):
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
-

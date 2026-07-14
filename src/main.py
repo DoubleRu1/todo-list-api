@@ -1,16 +1,16 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+from sqlmodel import Session, select, SQLModel
 from typing import List, Optional
 
 from src.object import register_param, login_param, todos_param, TodoResponse
 from src.jwt import create_access_token, verify_token
-from src.database import engine, Base, get_db
+from src.database import engine, get_db
 from src.security import get_password_hash, verify_password
 import src.models
 
 # 在应用启动时创建数据库表
-src.models.Base.metadata.create_all(bind=engine)
+SQLModel.metadata.create_all(bind=engine)
 
 app: FastAPI = FastAPI()
 
@@ -30,7 +30,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if email is None:
         raise credentials_exception
         
-    user = db.query(src.models.User).filter(src.models.User.email == email).first()
+    user = db.exec(select(src.models.User).where(src.models.User.email == email)).first()
     if user is None:
         raise credentials_exception
         
@@ -39,7 +39,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @app.post(path="/register", status_code=status.HTTP_201_CREATED)
 def register(params: register_param, db: Session = Depends(get_db)):
     # 从数据库中查找用户是否存在
-    user = db.query(src.models.User).filter(src.models.User.email == params.email).first()
+    user = db.exec(select(src.models.User).where(src.models.User.email == params.email)).first()
 
     # 用户存在，则返回错误信息
     if user:
@@ -63,7 +63,7 @@ def register(params: register_param, db: Session = Depends(get_db)):
 @app.post(path="/login", status_code=status.HTTP_200_OK)
 def login(params: login_param, db: Session = Depends(get_db)):
     # 用户不存在或密码错误，则返回错误信息
-    user = db.query(src.models.User).filter(src.models.User.email == params.email).first()
+    user = db.exec(select(src.models.User).where(src.models.User.email == params.email)).first()
     if not user or not verify_password(params.password, user.password_hash):
         raise HTTPException(status_code=401, detail="邮箱或密码错误")
 
@@ -89,7 +89,7 @@ def create_todo(params: todos_param, db: Session = Depends(get_db), current_user
 @app.put(path="/todos/{id}", response_model=TodoResponse)
 def update_todo(id: int, params: todos_param, db: Session = Depends(get_db), current_user: src.models.User = Depends(get_current_user)):
     # 查找该 TODO 并且属于当前登录用户
-    db_todo = db.query(src.models.Todo).filter(src.models.Todo.id == id, src.models.Todo.owner_id == current_user.id).first()
+    db_todo = db.exec(select(src.models.Todo).where(src.models.Todo.id == id, src.models.Todo.owner_id == current_user.id)).first()
     
     # 查不到可能是没权限（不是你的）或者不存在，统一返回404（为了安全可以统一404防止枚举，或403）
     if db_todo is None:
@@ -101,6 +101,7 @@ def update_todo(id: int, params: todos_param, db: Session = Depends(get_db), cur
     if params.completed is not None:
         db_todo.completed = params.completed
         
+    db.add(db_todo)
     db.commit()
     db.refresh(db_todo)
     return db_todo
@@ -108,7 +109,7 @@ def update_todo(id: int, params: todos_param, db: Session = Depends(get_db), cur
 @app.delete(path="/todos/{id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_todo(id: int, db: Session = Depends(get_db), current_user: src.models.User = Depends(get_current_user)):
     # 查看用户是否有权限删除
-    db_todo = db.query(src.models.Todo).filter(src.models.Todo.id == id, src.models.Todo.owner_id == current_user.id).first()
+    db_todo = db.exec(select(src.models.Todo).where(src.models.Todo.id == id, src.models.Todo.owner_id == current_user.id)).first()
     
     # 没有权限或不存在返回404
     if db_todo is None:
@@ -129,16 +130,16 @@ def get_todos(
     current_user: src.models.User = Depends(get_current_user)
 ):
     # 初始化基础查询，只能查自己的数据
-    query = db.query(src.models.Todo).filter(src.models.Todo.owner_id == current_user.id)
+    query = select(src.models.Todo).where(src.models.Todo.owner_id == current_user.id)
     
     # 根据完成状态过滤
     if completed is not None:
-        query = query.filter(src.models.Todo.completed == completed)
+        query = query.where(src.models.Todo.completed == completed)
         
     # 根据 title 进行模糊过滤搜索
     if search is not None:
-        query = query.filter(src.models.Todo.title.ilike(f"%{search}%"))
+        query = query.where(src.models.Todo.title.ilike(f"%{search}%"))
         
     # 分页查询
-    todos = query.offset(skip).limit(limit).all()
+    todos = db.exec(query.offset(skip).limit(limit)).all()
     return todos

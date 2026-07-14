@@ -25,13 +25,11 @@ class TodoResponse(pydantic.BaseModel):
     completed: bool
     owner_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class UserResponse(pydantic.BaseModel):
     id: int
     name: str
     email: str
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}

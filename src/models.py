@@ -1,27 +1,26 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
-from sqlalchemy.orm import relationship
-from src.database import Base
+from typing import Optional, List
+from sqlmodel import Field, SQLModel, Relationship
 
-class User(Base):
+class User(SQLModel, table=True):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    email = Column(String, unique=True, index=True)
-    password_hash = Column(String)
+    id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    name: str = Field(index=True)
+    email: str = Field(unique=True, index=True)
+    password_hash: str
 
     # 建立与 Todo 模型的一对多关系
-    todos = relationship("Todo", back_populates="owner")
+    todos: List["Todo"] = Relationship(back_populates="owner")
 
 
-class Todo(Base):
+class Todo(SQLModel, table=True):
     __tablename__ = "todos"
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    description = Column(String)
-    completed = Column(Boolean, default=False)
-    owner_id = Column(Integer, ForeignKey("users.id"))
+    id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    title: str = Field(index=True)
+    description: Optional[str] = None
+    completed: bool = Field(default=False)
+    owner_id: int = Field(foreign_key="users.id")
 
     # 建立与 User 模型的多对一关系
-    owner = relationship("User", back_populates="todos")
+    owner: Optional[User] = Relationship(back_populates="todos")
