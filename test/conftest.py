@@ -1,7 +1,10 @@
+import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import create_engine, Session, SQLModel
 from sqlmodel.pool import StaticPool
+
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from src.main import app
 from src.database import get_db
